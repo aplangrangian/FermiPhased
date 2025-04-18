@@ -158,45 +158,43 @@ class FermiScriptGenerator(QWidget):
         layout.addLayout(row)
 
     def update_mode_fields(self):
-            mode = self.mode_switch.currentText()
+        mode = self.mode_switch.currentText()
 
-            # Remove "Number of Counts" layout if it exists
-            if self.counts_input_layout:
-                for i in reversed(range(self.counts_input_layout.count())):
-                    widget = self.counts_input_layout.itemAt(i).widget()
+        # Remove Number of Counts field if it exists
+        if self.counts_input_layout:
+            for i in reversed(range(self.counts_input_layout.count())):
+                widget = self.counts_input_layout.itemAt(i).widget()
+                if widget:
+                    widget.setParent(None)
+            self.main_layout.removeItem(self.counts_input_layout)
+            self.counts_input_layout = None
+            if "Number of Counts" in self.fields:
+                del self.fields["Number of Counts"]
+
+        # Remove Number of Phase Bins if switching to Constant Counts
+        if mode == "Constant Counts":
+            if self.phase_bins_layout:
+                for i in reversed(range(self.phase_bins_layout.count())):
+                    widget = self.phase_bins_layout.itemAt(i).widget()
                     if widget:
                         widget.setParent(None)
-                self.main_layout.removeItem(self.counts_input_layout)
-                self.counts_input_layout = None
-                if "Number of Counts" in self.fields:
-                    del self.fields["Number of Counts"]
+                self.main_layout.removeItem(self.phase_bins_layout)
+                self.phase_bins_layout = None
+                if "Number of Phase Bins" in self.fields:
+                    del self.fields["Number of Phase Bins"]
 
+            # Add Number of Counts input
+            self.counts_input_layout = self.create_custom_input("Number of Counts", "10000")
+            self.main_layout.insertLayout(11, self.counts_input_layout)
 
+        else:
+            # If switching *back*, re-add Number of Phase Bins if it's missing
+            if "Number of Phase Bins" not in self.fields:
+                self.phase_bins_layout = self.create_custom_input("Number of Phase Bins", "14")
+                self.main_layout.insertLayout(11, self.phase_bins_layout)
 
-            # --- Remove "Number of Phase Bins" if present and mode is not Basic or Multiple Times ---
-            if mode == "Constant Counts":
-                if self.phase_bins_layout:
-                    for i in reversed(range(self.phase_bins_layout.count())):
-                        widget = self.phase_bins_layout.itemAt(i).widget()
-                        if widget:
-                            widget.setParent(None)
-                    self.main_layout.removeItem(self.phase_bins_layout)
-                    self.phase_bins_layout = None
-                    if "Number of Phase Bins" in self.fields:
-                        del self.fields["Number of Phase Bins"]
-
-            # Reset other fields
-            if "Number of Phase Bins" in self.fields:
-                self.fields["Number of Phase Bins"].setEnabled(False)
-            self.fields["Min Time (MET)"].setEnabled(True)
-            self.fields["Max Time (MET)"].setEnabled(True)
-
-            if mode == "Constant Counts":
-                self.fields["Number of Phase Bins"].setEnabled(False)
-                self.counts_input_layout = self.create_custom_input("Number of Counts", "10000")
-                self.main_layout.insertLayout(10, self.counts_input_layout)
-
-            elif mode == "Multiple Times":
+            # Placeholder handling
+            if mode == "Multiple Times":
                 self.fields["Min Time (MET)"].setPlaceholderText("Comma-separated start times")
                 self.fields["Max Time (MET)"].setPlaceholderText("Comma-separated end times")
             else:
