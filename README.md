@@ -1,1 +1,8 @@
 # FermiPhased
+
+
+This Python code creates a graphical user interface (GUI) application called **Fermi Script Generator**, designed to help users generate customized shell scripts for processing Fermi Gamma-ray Space Telescope data. Built using the PyQt5 library, the interface allows users to input astrophysical parameters such as period, RA/DEC, energy ranges, and time intervals, and select data files like event and spacecraft files. It also includes options to choose output directories, save/load user settings from JSON, and optionally upload the generated scripts to a computing cluster.
+
+A key feature of the application is the **mode selector** with three options: `"Basic"`, `"Constant Counts"`, and `"Multiple Times"`. Each mode dynamically changes which fields are visible or required. In Basic mode, the user inputs a fixed time range and the number of phase bins. In Constant Counts mode, the user enters a desired count level instead of phase bins, allowing the app to calculate how many bins are needed. In Multiple Times mode, the user provides multiple start/stop time pairs to generate separate scripts for different time intervals. This flexibility makes the tool suitable for a range of scientific analyses.
+
+The backend logic reads user input, handles layout changes based on the selected mode, and then uses that data to generate one or more shell scripts, saving them to the chosen directory. These scripts likely call standard Fermi data tools (`gtselect`, `gtbin`, etc.) to filter and process gamma-ray event data according to the specified parameters. The modular structure, settings persistence, and mode-specific UI behavior make this a user-friendly tool for astronomers working with Fermi data pipelines.
