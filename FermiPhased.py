@@ -318,8 +318,6 @@ import paramiko
 from scp import SCPClient
 
 # Configuration (Modify these settings)
-SSH_HOST = "pegasus.arc.gwu.edu"  # Change this to your actual SSH server (e.g., "192.168.1.1")
-SSH_USERNAME = "alexlange"
 SSH_KEY_PATH = "~/.ssh/id_rsa.pub"
 REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/epoch2/"  # Remote directory on the server
 LOCAL_PATH = "/Users/alexlange/Desktop/J1702/epoch2/"  # Directory containing the .sh files (Change if needed)
