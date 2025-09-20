@@ -9,13 +9,14 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt  # Add this at the top
 import numpy as np
+import yaml
 
 class FermiScriptGenerator(QWidget):
     def __init__(self):
         super().__init__()
 
         self.settings_file = "settings.json"  # Default settings file
-        self.setWindowTitle("Fermi Script Generator")
+        self.setWindowTitle("Let's get cracking with some Phase-resolved analysis of Fermi Lat Data")
         self.setGeometry(100, 100, 900, 800) # Change to full screen? Needs long enough for paths
         self.setStyleSheet("background-color: #0b0d1b; color: white; font-family: Arial;")
 
@@ -79,7 +80,7 @@ class FermiScriptGenerator(QWidget):
 
 
         # File paths
-        self.create_file_input(layout, "Working Directory", is_directory=True)
+        self.create_file_input(layout, "Remote Directory", is_directory=True)
         self.create_file_input(layout, "Local Directory", is_directory=True)
         self.create_file_input(layout, "Spacecraft File", is_directory=False)
         self.create_file_input(layout, "Event File", is_directory=False)
@@ -307,11 +308,11 @@ class FermiScriptGenerator(QWidget):
     def generate_scripts(self):
         """Needs mode updates"""
         mode = self.mode_switch.currentText()
-        """Generates the scripts and saves them in the selected working directory."""
-        working_dir = self.fields["Working Directory"].text().strip()
+        """Generates the scripts and saves them in the selected Remote Directory."""
+        working_dir = self.fields["Remote Directory"].text().strip()
         local_dir = self.fields["Local Directory"].text().strip()
         if not working_dir:
-            self.status_text.append("⚠️ Error: No working directory selected!")
+            self.status_text.append("⚠️ Error: No remote directory selected!")
             return
 
         try:
@@ -344,10 +345,29 @@ class FermiScriptGenerator(QWidget):
                         self.gen_script(i, phase_bins, ra, dec, t0, period, event_file, sc_file),
                         self.gtselect_script(i, ra, dec, rad, tmin, tmax, emin, emax),
                         self.gtbin_script(i, sc_file, emin, emax, ebins, ra, dec),
-                        self.gtltcube_script(i, sc_file, tmin, tmax)
+                        self.gtltcube_script(i, sc_file, tmin, tmax),
+                        self.gen_closer(phase_bins),
+
+
                     ])
 
                     script_path = os.path.join(local_dir, f"phase_{i}.sh")
+                    self.generate_config(
+                        i,
+                        local_dir,
+                        event_file,
+                        sc_file,
+                        ra,
+                        dec,
+                        rad,
+                        tmin,
+                        tmax,
+                        emin,
+                        emax,
+                        ebins
+                    )
+                    self.generate_analysis_script(i, local_dir,working_dir,phase_bins)
+
                     with open(script_path, "w") as f:
                         f.write(script_content)
 
@@ -371,6 +391,9 @@ class FermiScriptGenerator(QWidget):
                     script_path = os.path.join(local_dir, f"phase_{i}.sh")
                     with open(script_path, "w") as f:
                         f.write(script_content)
+
+
+
             if mode == "Multiple Times":
                 phase_bins = int(self.fields["Number of Phase Bins"].text())
                 # print(phase_bins)
@@ -408,7 +431,8 @@ class FermiScriptGenerator(QWidget):
             self.status_text.append(f"⚠️ Error: {e}")
         if self.upload_toggle.isChecked():
             self.status_text.append("🚀 Uploading scripts to the cluster...")
-            scp_transfer()
+            # scp_transfer()
+            scp_transfer(local_dir, working_dir)
 
     def gen_script(self, phase, phase_bins, ra, dec, t0, period, event_file, sc_file):
         cos_value = np.cos(360 / (2 * phase_bins) / 180 * np.pi)  # Precompute cosine
@@ -439,16 +463,244 @@ class FermiScriptGenerator(QWidget):
     def gen_header(self,i, working_dir, phase_bins):
         return f"""#!/bin/sh
 
-#SBATCH -p tiny
+#SBATCH -p nano
 #SBATCH -N 1
 #SBATCH -D {working_dir}/{i}/
 #SBATCH --export=MY_FERMI_DIR=/scratch/groups/kargaltsevgrp/lange/4FGL_Make
-#SBATCH -t 4:00:00
+#SBATCH -t 30:00
 
 . /c1/apps/anaconda/2021.05/etc/profile.d/conda.sh
 
 conda activate fermi2
 """
+
+
+    def gen_closer(self, phase_bins):
+        return f"""
+
+touch done.flag
+sleep 60
+cd ..
+COUNT=$(find . -type f -name "*.flag" | wc -l)
+
+if [ "$COUNT" -eq {phase_bins} ]; then
+    echo "All $COUNT phases complete. Running analysis."
+    for i in {{1..{phase_bins}}}
+    do
+    cp config.yaml $i
+    done
+
+    cat > analyze_script.sh << 'EOF'
+#!/bin/sh
+#SBATCH -p nano
+#SBATCH -N 1
+#SBATCH --export=MY_FERMI_DIR=/scratch/groups/kargaltsevgrp/lange/4FGL_Make
+#SBATCH -t 30:00
+
+
+. /c1/apps/anaconda/2021.05/etc/profile.d/conda.sh
+conda activate fermipy
+
+python analyze_phases.py
+EOF
+
+
+    sbatch analyze_script.sh
+else
+    echo "⏳ $COUNT/{phase_bins} phases done. Passing to another node..."
+fi
+"""
+
+
+    def generate_config(self, phase, local_dir, event_file, sc_file, ra, dec, radius, tmin, tmax, emin, emax, ebins):
+        config = {
+            "data": {
+                "evfile": "./ft1_00.fits",
+                "scfile": sc_file,
+                "ltcube": "./ltcube_00.fits",
+            },
+            "binning": {
+                "roiwidth": radius,
+                "binsz": 0.05,
+                "binsperdec": 8,
+                "enumbins": ebins,
+            },
+            "selection": {
+                "emin": emin,
+                "emax": emax,
+                "zmax": 90,
+                "evclass": 128,
+                "evtype": 3,
+                "ra": ra,
+                "dec": dec,
+                "tmin": tmin,
+                "tmax": tmax,
+            },
+            "gtlike": {
+                "edisp": True,
+                "irfs": "P8R3_SOURCE_V3",
+                "edisp_disable": ["isodiff"],
+                "edisp_bins": -2,
+            },
+            "model": {
+                "src_roiwidth": str(int(radius)+5),
+                "galdiff": '/CCAS/home/alexlange/.conda/envs/fermi2/share/fermitools/refdata/fermi/galdiffuse/gll_iem_v07.fits',
+                "isodiff": "/CCAS/home/alexlange/.conda/envs/fermi2/share/fermitools/refdata/fermi/galdiffuse/iso_P8R3_SOURCE_V3_v1.txt",
+                "catalogs": [
+                    "/scratch/kargaltsevgrp/lange/dr4/gll_psc_v35.fit",
+                    "/scratch/kargaltsevgrp/lange/ext/XML/FornaxA.xml","/scratch/kargaltsevgrp/lange/ext/XML/MSH15-56PWN.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1109.4-6115.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ2301.9+5855.xml","/scratch/kargaltsevgrp/lange/ext/XML/S147.xml","/scratch/kargaltsevgrp/lange/ext/XML/HB3.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ1723.5-0501.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1553.8-5325.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1836.5-0651.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1857.7+0246.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1655.5-4737.xml","/scratch/kargaltsevgrp/lange/ext/XML/G279.0+1.1.xml","/scratch/kargaltsevgrp/lange/ext/XML/W3.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1808-204.xml","/scratch/kargaltsevgrp/lange/ext/XML/HB9.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1640-465.xml","/scratch/kargaltsevgrp/lange/ext/XML/G150.3Gauss.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1614-518.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1745.8-3028.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1355.1-6420.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ2304.0+5406.xml","/scratch/kargaltsevgrp/lange/ext/XML/HB21Ambrogi.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ0851.9-4620.xml","/scratch/kargaltsevgrp/lange/ext/XML/G106.3+2.7.xml","/scratch/kargaltsevgrp/lange/ext/XML/SMC-Galaxy.xml","/scratch/kargaltsevgrp/lange/ext/XML/RXJ1713-3946.xml","/scratch/kargaltsevgrp/lange/ext/XML/G296.5+10.0.xml","/scratch/kargaltsevgrp/lange/ext/XML/W41.xml","/scratch/kargaltsevgrp/lange/ext/XML/RCW86.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1834.1-0706.xml","/scratch/kargaltsevgrp/lange/ext/XML/gammaCygni.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1303-631.xml","/scratch/kargaltsevgrp/lange/ext/XML/LMC-Galaxy.xml","/scratch/kargaltsevgrp/lange/ext/XML/LMC-North.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1023.3-5747.xml","/scratch/kargaltsevgrp/lange/ext/XML/IC443.xml","/scratch/kargaltsevgrp/lange/ext/XML/LMC-FarWest.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1213.3-6240.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ2208.4+6443.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ0822.1-4253.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1813-178.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ0534.5+2201.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1633.0-4746.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ1501.0-6310.xml","/scratch/kargaltsevgrp/lange/ext/XML/Monoceros.xml","/scratch/kargaltsevgrp/lange/ext/XML/CygnusCocoon.xml","/scratch/kargaltsevgrp/lange/ext/XML/G42.8+0.6.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1652.2-4633.xml","/scratch/kargaltsevgrp/lange/ext/XML/MSH15-56SNR.xml","/scratch/kargaltsevgrp/lange/ext/XML/W51C.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1514.2-5909.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1507.9-6228.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1420.3-6046.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ1626.9-2431.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1409.1-6121.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1534-571.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ2129.9+5833.xml","/scratch/kargaltsevgrp/lange/ext/XML/W30.xml","/scratch/kargaltsevgrp/lange/ext/XML/Kes73.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1636.3-4731.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1841-055.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1804.7-2144.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1631.6-4756.xml","/scratch/kargaltsevgrp/lange/ext/XML/W28.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ1642.1-5428.xml","/scratch/kargaltsevgrp/lange/ext/XML/CenALobes.xml","/scratch/kargaltsevgrp/lange/ext/XML/Rosette.xml","/scratch/kargaltsevgrp/lange/ext/XML/CygnusLoop.xml","/scratch/kargaltsevgrp/lange/ext/XML/LMC-30DorWest.xml","/scratch/kargaltsevgrp/lange/ext/XML/FHESJ1741.6-3917.xml","/scratch/kargaltsevgrp/lange/ext/XML/Kes79.xml","/scratch/kargaltsevgrp/lange/ext/XML/W44.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1036.3-5833.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1616-508.xml","/scratch/kargaltsevgrp/lange/ext/XML/FGESJ1838.9-0704.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1809-193.xml","/scratch/kargaltsevgrp/lange/ext/XML/VelaX_radio.xml","/scratch/kargaltsevgrp/lange/ext/XML/HESSJ1825Grondin.xml"
+                ]
+            }
+        }
+        config_path = os.path.join(local_dir, f"config.yaml")
+        with open(config_path, "w") as f:
+            yaml.dump(config, f, default_flow_style=False, sort_keys=False)
+
+        self.status_text.append(f"📝 Config saved: {config_path}")
+        self.close()
+    def generate_analysis_script(self, i, local_dir,working_dir,phase_bins):
+        """Write a phase-analysis driver Python script."""
+        script_content = f"""import os
+import re
+import numpy as np
+import matplotlib.pyplot as plt
+from math import *  # better to import only what you need
+from fermipy.gtanalysis import GTAnalysis
+
+os.environ["LATEXTDIR"] = "/scratch/kargaltsevgrp/lange/ext/"
+
+DEBUG = True
+VERBOSITY = 4 if DEBUG else 0
+
+def double_fig(*args):
+    out = [np.array([args[0], args[0] + 1]).flatten()]
+    for arg in args[1:]:
+        out.append(np.array([arg, arg]).flatten())
+    return out
+
+def setup_gta(directory):
+    os.chdir(directory)
+    match = re.search(r'{working_dir}(.*)', directory)
+    string = match[1] if match else None
+
+    gta = GTAnalysis(
+        './config.yaml',
+        optimizer={{'min_fit_quality': 3}},
+        logging={{'verbosity': 3}}
+    )
+    gta.setup(optimizer={{
+        'min_fit_quality': 3,
+        'optimizer': "MINUIT",
+        'retries': 1000,
+        'max_iter': 1000
+    }})
+
+    gta.free_sources(distance=15, free=False)
+    gta.free_source('4FGL J2032.4+4056', pars='norm')
+
+    gta.fit(min_fit_quality=3, optimizer='MINUIT', retries=1000, tol=1e-8)
+    gta.write_roi('norm', make_plots=True)
+    return gta
+
+
+def analyze_phases():
+    gta_list = []
+    base_dir = '{working_dir}'
+
+    for directory, _, _ in os.walk(base_dir):
+        if directory == base_dir:
+            continue
+        gta = setup_gta(directory)
+        gta_list.append(gta)
+    return gta_list
+
+def load_data_and_plot():
+    fluxes, flux_err, ts = [], [], []
+    num_bins = {phase_bins}
+    spec_params = np.zeros((num_bins, 5))
+    spec_errs = np.zeros((num_bins, 5))
+
+    for i in range(num_bins):
+        p = np.load(
+            f'{working_dir}/{{i + 1}}/norm.npy',
+            allow_pickle=True
+        ).flat[0]
+
+        src = p['sources']['4FGL J2032.4+4056']
+        fluxes.append(src['flux'])
+        flux_err.append(src['flux_err'])
+        ts.append(src['ts'])
+
+        spec_params[i, 0] = src['spectral_pars']['norm']['value']
+        spec_params[i, 1] = src['spectral_pars']['alpha']['value']
+        spec_params[i, 2] = src['spectral_pars']['beta']['value']
+        spec_params[i, 3] = src['spectral_pars']['Eb']['value']
+
+        spec_errs[i, 0] = src['spectral_pars']['norm']['error']
+        spec_errs[i, 1] = src['spectral_pars']['alpha']['error']
+        spec_errs[i, 2] = src['spectral_pars']['beta']['error']
+        spec_errs[i, 3] = src['spectral_pars']['Eb']['error']
+
+    phase = np.arange(0, 1, 1 / num_bins)
+    phase = np.append(phase, phase + 1)
+
+    fluxes = np.append(fluxes, fluxes)
+    flux_err = np.append(flux_err, flux_err)
+    ts = np.append(ts, ts)
+    spec_params = np.vstack([spec_params, spec_params])
+    spec_errs = np.vstack([spec_errs, spec_errs])
+
+    fig, axes = plt.subplots(4, 1, figsize=(20, 24), constrained_layout=True)
+    ax1, ax2, ax3, axts = axes
+
+    ax1.step(phase, fluxes * 1e8, "k", where='mid')
+    ax1.errorbar(phase, fluxes * 1e8, yerr=flux_err * 1e8, fmt="k+")
+    ax1.set_ylabel(r"Flux ($10^{{-8}}$ Ph cm$^{{-2}}$ s$^{{-1}}$)", fontsize=32)
+    ax1.legend(["(a)"], fontsize=20, frameon=False)
+
+    ax2.step(phase, spec_params[:, 1], "k", where='mid')
+    ax2.errorbar(phase, spec_params[:, 1], yerr=spec_errs[:, 1], fmt="k+")
+    ax2.set_ylabel(r'$\\\\alpha$', fontsize=32)
+    ax2.legend(["(b)"], fontsize=20, frameon=False)
+
+    ax3.step(phase, spec_params[:, 2], "k", where='mid')
+    ax3.errorbar(phase, spec_params[:, 2], yerr=spec_errs[:, 2], fmt="k+")
+    ax3.set_ylabel(r"$\\\\beta$", fontsize=32)
+    ax3.legend(["(c)"], fontsize=20, frameon=False)
+
+    axts.step(phase, ts, "k", where='mid')
+    axts.set_ylabel("TS", fontsize=28)
+    axts.legend(["(d)"], fontsize=20, frameon=False)
+
+    for ax in (ax1, ax2, ax3, axts):
+        ax.set_xlim(0, 2)
+        ax.axvline(1, color="gray", linestyle="--")
+        ax.tick_params(axis='both', labelsize=24)
+
+    ax1.set_xticks([])
+    ax2.set_xticks([])
+    ax3.set_xticks([])
+    plt.xlabel("Phase", fontsize=28)
+    plt.tight_layout()
+    plt.savefig("test.png")
+
+    return spec_params, spec_errs, phase, fluxes, flux_err, ts
+
+if __name__ == "__main__":
+    # user_input = input("Recalculate everything? (Enter=No, any key=Yes): ").strip()
+    # if user_input == "":
+        # pars, errs, phase, fluxes, flux_err, ts = load_data_and_plot()
+    # else:
+        analyze_phases()
+        pars, errs, phase, fluxes, flux_err, ts = load_data_and_plot()
+
+"""
+        script_path = os.path.join(local_dir, "analyze_phases.py")
+        with open(script_path, "w") as f:
+            f.write(script_content)
+        self.status_text.append(f"🐍 Analysis script written: {script_path}")
+
+
 
 import paramiko
 from scp import SCPClient
@@ -457,8 +709,8 @@ from scp import SCPClient
 SSH_HOST = "pegasus.arc.gwu.edu"  # Change this to your actual SSH server (e.g., "192.168.1.1")
 SSH_USERNAME = "alexlange"
 SSH_KEY_PATH = "~/.ssh/id_rsa.pub"
-REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/contemp/epoch24/"  # Remote directory on the server
-LOCAL_PATH = "/Users/alexlange/Desktop/J1702/contemp/epoch24/"  # Directory containing the .sh files (Change if needed)
+REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/contemp/final/epoch1"  # Remote directory on the server
+LOCAL_PATH = "/Users/alexlange/Desktop/J1702/contemp/final/epoch1"  # Directory containing the .sh files (Change if needed)
 
 def create_ssh_client(hostname, username, key_filename):
     """Creates and returns an SSH client connection using key authentication."""
@@ -467,14 +719,14 @@ def create_ssh_client(hostname, username, key_filename):
     ssh.connect(hostname, username=username, key_filename=os.path.expanduser(key_filename))
     return ssh
 
-def scp_transfer():
+def scp_transfer(LOCAL_PATH, REMOTE_PATH):
     """Transfers all .sh files in LOCAL_PATH to the remote server via SCP."""
     try:
         ssh = create_ssh_client(SSH_HOST, SSH_USERNAME, SSH_KEY_PATH)
         scp = SCPClient(ssh.get_transport())
 
         # List all .sh files in LOCAL_PATH
-        files_to_transfer = [f for f in os.listdir(LOCAL_PATH) if f.endswith(".sh")]
+        files_to_transfer = [f for f in os.listdir(LOCAL_PATH) if f.endswith(".sh") or f.endswith(".yaml") or f.endswith("analyze_phases.py")]
 
         if not files_to_transfer:
             print("❌ No .sh files found to transfer.")
@@ -513,10 +765,9 @@ if __name__ == "__main__":
     window.show()
 
     app.exec_()
-    for i in range(5, 0, -1):
+    for i in range(2, 0, -1):
         print(f"⏳ Transferring scripts in {i} seconds...", end="\r")
         time.sleep(1)
     print("\n🚀 Starting SCP transfer now!")
-    # if self.upload_toggle.isChecked():
-    #     scp_transfer()
-    sys.exit()
+    # self.close()
+    # sys.exit()
