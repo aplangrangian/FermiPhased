@@ -463,11 +463,11 @@ class FermiScriptGenerator(QWidget):
     def gen_header(self,i, working_dir, phase_bins):
         return f"""#!/bin/sh
 
-#SBATCH -p nano
+#SBATCH -p tiny
 #SBATCH -N 1
 #SBATCH -D {working_dir}/{i}/
 #SBATCH --export=MY_FERMI_DIR=/scratch/groups/kargaltsevgrp/lange/4FGL_Make
-#SBATCH -t 30:00
+#SBATCH -t 4:00:00
 
 . /c1/apps/anaconda/2021.05/etc/profile.d/conda.sh
 
@@ -492,10 +492,10 @@ if [ "$COUNT" -eq {phase_bins} ]; then
 
     cat > analyze_script.sh << 'EOF'
 #!/bin/sh
-#SBATCH -p nano
+#SBATCH -p tiny
 #SBATCH -N 1
 #SBATCH --export=MY_FERMI_DIR=/scratch/groups/kargaltsevgrp/lange/4FGL_Make
-#SBATCH -t 30:00
+#SBATCH -t 4:00:00
 
 
 . /c1/apps/anaconda/2021.05/etc/profile.d/conda.sh
@@ -660,12 +660,12 @@ def load_data_and_plot():
 
     ax2.step(phase, spec_params[:, 1], "k", where='mid')
     ax2.errorbar(phase, spec_params[:, 1], yerr=spec_errs[:, 1], fmt="k+")
-    ax2.set_ylabel(r'$\\\\alpha$', fontsize=32)
+    ax2.set_ylabel(r'$\alpha$', fontsize=32)
     ax2.legend(["(b)"], fontsize=20, frameon=False)
 
     ax3.step(phase, spec_params[:, 2], "k", where='mid')
     ax3.errorbar(phase, spec_params[:, 2], yerr=spec_errs[:, 2], fmt="k+")
-    ax3.set_ylabel(r"$\\\\beta$", fontsize=32)
+    ax3.set_ylabel(r"$\beta$", fontsize=32)
     ax3.legend(["(c)"], fontsize=20, frameon=False)
 
     axts.step(phase, ts, "k", where='mid')
@@ -704,14 +704,16 @@ if __name__ == "__main__":
 
 import paramiko
 from scp import SCPClient
-
+# =============================================================================
+# =============================================================================
 # Configuration (Modify these settings)
 SSH_HOST = "pegasus.arc.gwu.edu"  # Change this to your actual SSH server (e.g., "192.168.1.1")
 SSH_USERNAME = "alexlange"
 SSH_KEY_PATH = "~/.ssh/id_rsa.pub"
 REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/contemp/final/epoch1"  # Remote directory on the server
 LOCAL_PATH = "/Users/alexlange/Desktop/J1702/contemp/final/epoch1"  # Directory containing the .sh files (Change if needed)
-
+# =============================================================================
+# =============================================================================
 def create_ssh_client(hostname, username, key_filename):
     """Creates and returns an SSH client connection using key authentication."""
     ssh = paramiko.SSHClient()
