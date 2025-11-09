@@ -16,17 +16,17 @@ class FermiScriptGenerator(QWidget):
         super().__init__()
 
         self.settings_file = "settings.json"  # Default settings file
-        self.setWindowTitle("Let's get cracking with some Phase-resolved analysis of Fermi Lat Data")
+        self.setWindowTitle("Phase-resolved analysis with Fermi-Lat data")
         self.setGeometry(100, 100, 900, 800) # Change to full screen? Needs long enough for paths
         self.setStyleSheet("background-color: #0b0d1b; color: white; font-family: Arial;")
 
-        # Main layout
+        # PtQt5 layout  for GUI
         layout = QVBoxLayout()
 
-        # Add Fermi Logo
+        # Fermi Logo
         self.logo_label = QLabel(self)
         self.logo_label.setPixmap(QPixmap("fermi_logo.png").scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        self.logo_label.setAlignment(Qt.AlignCenter)  # Correct
+        self.logo_label.setAlignment(Qt.AlignCenter)  # Correct alignment
         layout.addWidget(self.logo_label)
 
 
@@ -40,7 +40,7 @@ class FermiScriptGenerator(QWidget):
         # Title
         title_label = QLabel("Fermi Script Generator")
         title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        self.logo_label.setAlignment(Qt.AlignCenter)  # Correct
+        self.logo_label.setAlignment(Qt.AlignCenter)  # Correct alignment
         layout.addWidget(title_label)
 
         # Divider Line
@@ -55,7 +55,7 @@ class FermiScriptGenerator(QWidget):
         layout.addWidget(self.settings_label)
 
         self.mode_switch = QComboBox()
-        self.mode_switch.addItems(["Basic", "Constant Counts", "Multiple Times"])
+        self.mode_switch.addItems(["Basic", "Adaptive (Fixed Counts) Binning", "Joint Epoch Fitting"])
         self.mode_switch.currentIndexChanged.connect(self.update_mode_fields)
         layout.addWidget(QLabel("Mode: (Please select one of the following)"))
         self.mode_switch.setFont(QFont("Arial", 14))
@@ -67,6 +67,7 @@ class FermiScriptGenerator(QWidget):
         self.counts_input_layout = None
         self.phase_bins_layout = None
         self.main_layout = layout
+        # LS 5039 parameters are set as default
         self.create_input(layout, "Period", "3.90608")
         self.create_input(layout, "T0", "55016.58")
         self.create_input(layout, "RA", "276.5637")
@@ -80,7 +81,7 @@ class FermiScriptGenerator(QWidget):
 
 
         # File paths
-        self.create_file_input(layout, "Remote Directory", is_directory=True)
+        self.create_file_input(layout, "Remote Directory",is_directory=True)
         self.create_file_input(layout, "Local Directory", is_directory=True)
         self.create_file_input(layout, "Spacecraft File", is_directory=False)
         self.create_file_input(layout, "Event File", is_directory=False)
@@ -121,10 +122,11 @@ class FermiScriptGenerator(QWidget):
 
         self.setLayout(layout)
 
-        # Load previous settings if available
+        # Load previous settings in a .JSON format
         self.load_settings()
 
         self.update_mode_fields()  # Adds correct field depending on initial mode
+        # No more problems between multiple switching?
 
 
     def create_input(self, layout, label, default_value=""):
@@ -213,7 +215,8 @@ class FermiScriptGenerator(QWidget):
                 del self.fields["Number of Counts"]
             self.counts_coords = None
 
-        if mode == "Constant Counts":
+        # Constant Counts needs updating
+        if mode == "Adaptive (Fixed Counts) Binning":
             label = QLabel("Number of Counts:")
             label.setStyleSheet("color: #00BFFF;")
             entry = QLineEdit("10000")
