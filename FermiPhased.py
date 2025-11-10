@@ -26,7 +26,7 @@ from scp import SCPClient
 
 # =============================================================================
 # =============================================================================
-# Configuration (Modify these settings)
+# Configuration (Modify these settings please)
 SSH_HOST = "your.cluster.address.edu"        # e.g., "cluster.university.edu" or "192.168.1.100"
 SSH_USERNAME = "your_username"               # Replace with your actual cluster login username
 SSH_KEY_PATH = "~/.ssh/id_rsa"               # Path to your private SSH key (not the .pub file)
@@ -309,6 +309,7 @@ class FermiScriptGenerator(QWidget):
                 self.status_text.append(f"📊 Adaptive bin edges saved → {bin_info_path}")
 
         #         # --- Generate Scripts ---
+                  # 000 Old Scripts to generate phase bins 000
         #         for i, (pmin, pmax) in enumerate(zip(bin_edges[:-1], bin_edges[1:]), start=1):
         #             script_content = f"""#!/bin/sh
         # #SBATCH -p tiny
@@ -577,7 +578,6 @@ class FermiScriptGenerator(QWidget):
                         f"✅ Generated {num_bins} adaptive phase scripts in {local_dir}"
                     )
 
-                    # Optional: Upload if toggle enabled
                     if self.upload_toggle.isChecked():
                         self.status_text.append("🚀 Uploading adaptive scripts to cluster...")
                         scp_transfer(local_dir, working_dir)
@@ -657,19 +657,29 @@ class FermiScriptGenerator(QWidget):
 
     def gtltcube_script_multiple(self, phase, sc_file, tmins, tmaxs):
         return f"""gtltcube evfile=./ft1_00.fits evtable="EVENTS" scfile={sc_file} sctable="SC_DATA" outfile=./ltcube_00.fits dcostheta=0.025 binsz=1.0 phibins=0 tmin={tmins[0]} tmax={tmaxs[1]} file_version="1" zmin=0.0 zmax=90.0 chatter=2 clobber=yes debug=no gui=no mode="ql" """
-
+    # =============================================================================
+    # Here, we generate the .sh files that will run our data reduction and analysis
+    # pipeline.
+    # =============================================================================
     def gen_header(self,i, working_dir, phase_bins):
         return f"""#!/bin/sh
 
 #SBATCH -p tiny
 #SBATCH -N 1
 #SBATCH -D {working_dir}/{i}/
-#SBATCH --export=MY_FERMI_DIR=/scratch/groups/kargaltsevgrp/lange/4FGL_Make
 #SBATCH -t 4:00:00
-
+#SBATCH --mail-user=your.email@domain.edu     # Your email address
+#SBATCH --mail-type=END,FAIL                  # Send email upon completion or failure as a useful diagnostic
+# =============================================================================
+# Pay attention to the location of your Fermi Make XML directory
+#SBATCH --export=MY_FERMI_DIR=/path/to/4FGL_Make
+# =============================================================================
+# =============================================================================
+# Active any required scripts or environments in the 
 . /c1/apps/anaconda/2021.05/etc/profile.d/conda.sh
-
 conda activate fermi2
+
+# =============================================================================
 """
 
 
@@ -773,9 +783,16 @@ fi
 
         self.status_text.append(f"📝 Config saved: {config_path}")
         self.close()
+
+    # =============================================================================
+    # This is another part of the script that  directs FermiPhased to create the 
+    # python script that will analyze the source using a likelihood analysis.
+    # This process is set up to run on python and requires fermipy. Other common
+    # dependencies are required.
+    # =============================================================================
     def generate_analysis_script(self, i, local_dir,working_dir,phase_bins):
         """Write a phase-analysis driver Python script."""
-        source_name = "4FGL J2032.4+4056"
+        source_name = "4FGL J2032.4+4056" #Example Source Name: LS 5039
         script_content = f"""import os
 import re
 import numpy as np
@@ -783,8 +800,12 @@ import matplotlib.pyplot as plt
 from math import *  # better to import only what you need
 from fermipy.gtanalysis import GTAnalysis
 
+# =============================================================================
+# This is another such path that requires the User's attention. This line 
+# points FermiPhased to the extended sources directory for modeling of non-
+# pointsource gamma-ray source.
 os.environ["LATEXTDIR"] = "/scratch/kargaltsevgrp/lange/ext/"
-
+# =============================================================================
 DEBUG = True
 VERBOSITY = 4 if DEBUG else 0
 
@@ -847,7 +868,12 @@ def load_data_and_plot():
         fluxes.append(src['flux'])
         flux_err.append(src['flux_err'])
         ts.append(src['ts'])
-
+        
+        # =============================================================================
+        # For now, we use the "LogParabola" spectral model with components: "norm", 
+        # "alpha", "beta" and "norm". If you use a different spectral model, be sure
+        # to customize as needed.
+       
         spec_params[i, 0] = src['spectral_pars']['norm']['value']
         spec_params[i, 1] = src['spectral_pars']['alpha']['value']
         spec_params[i, 2] = src['spectral_pars']['beta']['value']
@@ -857,7 +883,9 @@ def load_data_and_plot():
         spec_errs[i, 1] = src['spectral_pars']['alpha']['error']
         spec_errs[i, 2] = src['spectral_pars']['beta']['error']
         spec_errs[i, 3] = src['spectral_pars']['Eb']['error']
-
+        
+         # =============================================================================
+         
     phase = np.arange(0, 1, 1 / num_bins)
     phase = np.append(phase, phase + 1)
 
@@ -899,7 +927,7 @@ def load_data_and_plot():
     ax3.set_xticks([])
     plt.xlabel("Phase", fontsize=28)
     plt.tight_layout()
-    plt.savefig("test.png")
+    plt.savefig("Phased_Resolved_Analysis_{source_name}.png")
 
     return spec_params, spec_errs, phase, fluxes, flux_err, ts
 
