@@ -27,11 +27,11 @@ from scp import SCPClient
 # =============================================================================
 # =============================================================================
 # Configuration (Modify these settings)
-SSH_HOST = "pegasus.arc.gwu.edu"  # Change this to your actual SSH server (e.g., "192.168.1.1")
-SSH_USERNAME = "alexlange"
-SSH_KEY_PATH = "~/.ssh/id_rsa.pub"
-REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/contemp/final/epoch1"  # Remote directory on the server
-LOCAL_PATH = "/Users/alexlange/Desktop/J1702/contemp/final/epoch1"  # Directory containing the .sh files (Change if needed)
+SSH_HOST = "your.cluster.address.edu"        # e.g., "cluster.university.edu" or "192.168.1.100"
+SSH_USERNAME = "your_username"               # Replace with your actual cluster login username
+SSH_KEY_PATH = "~/.ssh/id_rsa"               # Path to your private SSH key (not the .pub file)
+REMOTE_PATH = "/path/to/remote/project"      # Target directory on the remote server
+LOCAL_PATH = "/path/to/local/project"        # Local directory for syncing files
 # =============================================================================
 # =============================================================================
 
