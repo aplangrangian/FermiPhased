@@ -7,9 +7,29 @@ from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
     QFileDialog, QTextEdit, QHBoxLayout, QFrame, QCheckBox, QGridLayout, QComboBox
 )
-from PyQt5.QtCore import Qt  # Add this at the top
+from PyQt5.QtCore import Qt
 import numpy as np
 import yaml
+import paramiko
+from scp import SCPClient
+
+
+
+
+# =============================================================================
+# =============================================================================
+# Configuration (Modify these settings)
+SSH_HOST = "cluser.address"  # Change this to your actual SSH server (e.g., "username.cluster.org)
+SSH_USERNAME = "username"
+SSH_KEY_PATH = "~/.ssh/id_rsa.pub" # Your SSH key if needed
+REMOTE_PATH = "/Path/to/server/directory"  # Remote directory on the server
+LOCAL_PATH = "/Path/to/local/directory"  # Directory containing the .sh files (Change if needed)
+# =============================================================================
+# =============================================================================
+
+
+
+
 
 class FermiScriptGenerator(QWidget):
     def __init__(self):
@@ -705,18 +725,9 @@ if __name__ == "__main__":
 
 
 
-import paramiko
-from scp import SCPClient
-# =============================================================================
-# =============================================================================
-# Configuration (Modify these settings)
-SSH_HOST = "pegasus.arc.gwu.edu"  # Change this to your actual SSH server (e.g., "192.168.1.1")
-SSH_USERNAME = "alexlange"
-SSH_KEY_PATH = "~/.ssh/id_rsa.pub"
-REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/contemp/final/epoch1"  # Remote directory on the server
-LOCAL_PATH = "/Users/alexlange/Desktop/J1702/contemp/final/epoch1"  # Directory containing the .sh files (Change if needed)
-# =============================================================================
-# =============================================================================
+
+
+
 def create_ssh_client(hostname, username, key_filename):
     """Creates and returns an SSH client connection using key authentication."""
     ssh = paramiko.SSHClient()
