@@ -1,3 +1,11 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+"""
+Created on Sun Nov  9 22:52:40 2025
+
+@author: alexlange
+"""
+
 import sys
 import json
 import os
@@ -19,11 +27,11 @@ from scp import SCPClient
 # =============================================================================
 # =============================================================================
 # Configuration (Modify these settings)
-SSH_HOST = "cluser.address"  # Change this to your actual SSH server (e.g., "username.cluster.org)
-SSH_USERNAME = "username"
-SSH_KEY_PATH = "~/.ssh/id_rsa.pub" # Your SSH key if needed
-REMOTE_PATH = "/Path/to/server/directory"  # Remote directory on the server
-LOCAL_PATH = "/Path/to/local/directory"  # Directory containing the .sh files (Change if needed)
+SSH_HOST = "pegasus.arc.gwu.edu"  # Change this to your actual SSH server (e.g., "192.168.1.1")
+SSH_USERNAME = "alexlange"
+SSH_KEY_PATH = "~/.ssh/id_rsa.pub"
+REMOTE_PATH = "/scratch/kargaltsevgrp/lange/J1702/contemp/final/epoch1"  # Remote directory on the server
+LOCAL_PATH = "/Users/alexlange/Desktop/J1702/contemp/final/epoch1"  # Directory containing the .sh files (Change if needed)
 # =============================================================================
 # =============================================================================
 
@@ -214,7 +222,8 @@ class FermiScriptGenerator(QWidget):
 
     def update_mode_fields(self):
         mode = self.mode_switch.currentText()
-
+        working_dir = self.fields["Remote Directory"].text().strip()
+        local_dir = self.fields["Local Directory"].text().strip()
         if self.phase_bins_coords:
             row, col = self.phase_bins_coords
             for offset in [0, 1]:
@@ -252,6 +261,95 @@ class FermiScriptGenerator(QWidget):
             if self.input_col >= 2:
                 self.input_col = 0
                 self.input_row += 1
+
+
+            try:
+                from astropy.io import fits
+                import pandas as pd
+
+                # --- Get Inputs ---
+                num_counts = int(self.fields["Number of Counts"].text())
+                event_file = self.fields["Event File"].text().strip()
+                emin = float(self.fields["Min Energy"].text())
+                emax = float(self.fields["Max Energy"].text())
+                ra = float(self.fields["RA"].text())
+                dec = float(self.fields["DEC"].text())
+                rad = float(self.fields["Radius"].text())
+                sc_file = self.fields["Spacecraft File"].text().strip()
+                tmin = float(self.fields["Min Time (MET)"].text())
+                tmax = float(self.fields["Max Time (MET)"].text())
+                ebins = int(self.fields["Number of Energy Bins"].text())
+
+                # --- Load FITS ---
+                self.status_text.append(f"Loading event file: {event_file}")
+                with fits.open(event_file) as hdul:
+                    data = hdul[1].data
+                    pulse_phase = data["PULSE_PHASE"][
+                        (data["ENERGY"] > emin) & (data["ENERGY"] < emax)
+                    ]
+
+                # --- Adaptive Binning Calculation ---
+                sorted_phases = np.sort(pulse_phase)
+                num_bins = len(sorted_phases) // num_counts
+                bin_edges = np.array(
+                    [sorted_phases[i * num_counts] for i in range(num_bins)] + [1.0]
+                )
+                bin_widths = np.diff(bin_edges)
+                bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+                # Save bin info for reproducibility
+                bin_info = pd.DataFrame({
+                    "Bin Start": bin_edges[:-1],
+                    "Bin End": bin_edges[1:],
+                    "Bin Width": bin_widths,
+                    "Bin Center": bin_centers,
+                })
+                bin_info_path = os.path.join(local_dir, "adaptive_bins.csv")
+                bin_info.to_csv(bin_info_path, index=False)
+                self.status_text.append(f"📊 Adaptive bin edges saved → {bin_info_path}")
+
+        #         # --- Generate Scripts ---
+        #         for i, (pmin, pmax) in enumerate(zip(bin_edges[:-1], bin_edges[1:]), start=1):
+        #             script_content = f"""#!/bin/sh
+        # #SBATCH -p tiny
+        # #SBATCH -N 1
+        # #SBATCH -D {working_dir}/{i}/
+        # #SBATCH --export=MY_FERMI_DIR=/scratch/groups/kargaltsevgrp/lange/4FGL_Make
+        # #SBATCH -t 4:00:00
+
+        # . /c1/apps/anaconda/2021.05/etc/profile.d/conda.sh
+        # conda activate fermi2
+
+        # gtselect infile={event_file} outfile=./ft1_00.fits \\
+        #     ra={ra} dec={dec} rad={rad} \\
+        #     tmin={tmin} tmax={tmax} emin={emin} emax={emax} \\
+        #     phasemin={pmin:.6f} phasemax={pmax:.6f} \\
+        #     zmin=0.0 zmax=90.0 evclass=128 evtype=3 \\
+        #     convtype=-1 chatter=3 clobber=yes mode="ql"
+
+        # gtbin evfile=./ft1_00.fits scfile={sc_file} outfile=./ccube_00.fits \\
+        #     algorithm="ccube" ebinalg="LOG" emin={emin} emax={emax} enumbins={ebins} \\
+        #     nxpix=200 nypix=200 binsz=0.1 coordsys="CEL" xref={ra} yref={dec} proj="AIT" \\
+        #     clobber=yes debug=no gui=no mode="ql"
+
+        # gtltcube evfile=./ft1_00.fits scfile={sc_file} outfile=./ltcube_00.fits \\
+        #     dcostheta=0.025 binsz=1.0 phibins=0 tmin={tmin} tmax={tmax} chatter=2 clobber=yes
+
+        # touch done.flag
+        # """
+
+                    # phase_dir = os.path.join(local_dir, f"adaptive_{i}")
+                    # os.makedirs(phase_dir, exist_ok=True)
+                    # script_path = os.path.join(phase_dir, f"adaptive_{i}.sh")
+                    # with open(script_path, "w") as f:
+                    #     f.write(script_content)
+
+                self.status_text.append(
+                    f"✅ Generated {num_bins} adaptive phase scripts in: {local_dir}"
+                )
+
+            except Exception as e:
+                self.status_text.append(f"⚠️ Adaptive binning error: {e}")
 
         else:
             label = QLabel("Number of Phase Bins:")
@@ -396,24 +494,97 @@ class FermiScriptGenerator(QWidget):
 
 
 
-            if mode == "Constant Counts":
-                period = float(self.fields["Period"].text())
-                t0 = float(self.fields["T0"].text())
-                num_counts = int(self.fields["Number of Counts"].text())
-                # tmin = int(self.fields["Min Time (MET)"].text())
-                # tmax = int(self.fields["Max Time (MET)"].text())
-                for i in range(1, phase_bins + 1):
-                    script_content = "\n\n".join([
-                        self.gen_header(i, working_dir, phase_bins),
-                            self.gen_script(i, phase_bins, ra, dec, t0, period, event_file, sc_file),
-                        self.gtselect_script(i, ra, dec, rad, tmin, tmax, emin, emax),
-                        self.gtbin_script(i, sc_file, emin, emax, ebins, ra, dec),
-                        self.gtltcube_script(i, sc_file, tmin, tmax)
-                    ])
+            if mode == "Adaptive (Fixed Counts) Binning":
+                try:
+                    from astropy.io import fits
+                    import pandas as pd
 
-                    script_path = os.path.join(local_dir, f"phase_{i}.sh")
-                    with open(script_path, "w") as f:
-                        f.write(script_content)
+                    self.status_text.append("🧮 Starting adaptive (fixed-count) binning...")
+
+                    num_counts = int(self.fields["Number of Counts"].text())
+                    event_file = self.fields["Event File"].text().strip()
+                    sc_file = self.fields["Spacecraft File"].text().strip()
+                    emin = float(self.fields["Min Energy"].text())
+                    emax = float(self.fields["Max Energy"].text())
+                    ra = float(self.fields["RA"].text())
+                    dec = float(self.fields["DEC"].text())
+                    rad = float(self.fields["Radius"].text())
+                    tmin = float(self.fields["Min Time (MET)"].text())
+                    tmax = float(self.fields["Max Time (MET)"].text())
+                    ebins = int(self.fields["Number of Energy Bins"].text())
+                    local_dir = self.fields["Local Directory"].text().strip()
+                    working_dir = self.fields["Remote Directory"].text().strip()
+
+                    os.makedirs(local_dir, exist_ok=True)
+
+                    # --- Load the FITS data ---
+                    with fits.open(event_file) as hdul:
+                        data = hdul[1].data
+                        pulse_phase = data["PULSE_PHASE"][
+                            (data["ENERGY"] > emin) & (data["ENERGY"] < emax)
+                        ]
+
+                    if len(pulse_phase) < num_counts:
+                        self.status_text.append("⚠️ Warning: Not enough counts for requested bin size.")
+                        return
+
+                    # --- Compute adaptive bins ---
+                    sorted_phases = np.sort(pulse_phase)
+                    num_bins = len(sorted_phases) // num_counts
+                    bin_edges = np.array(
+                        [sorted_phases[i * num_counts] for i in range(num_bins)] + [1.0]
+                    )
+                    bin_widths = np.diff(bin_edges)
+                    bin_centers = 0.5 * (bin_edges[:-1] + bin_edges[1:])
+
+                    # --- Save bin info ---
+                    bin_info = pd.DataFrame({
+                        "Bin Start": bin_edges[:-1],
+                        "Bin End": bin_edges[1:],
+                        "Bin Width": bin_widths,
+                        "Bin Center": bin_centers
+                    })
+                    bin_info_path = os.path.join(local_dir, "adaptive_bins.csv")
+                    bin_info.to_csv(bin_info_path, index=False)
+                    self.status_text.append(f"📊 Saved adaptive bin info → {bin_info_path}")
+
+                    # --- Generate scripts per adaptive bin ---
+                    for i, (pmin, pmax) in enumerate(zip(bin_edges[:-1], bin_edges[1:]), start=1):
+                        script_content = "\n\n".join([
+                            self.gen_header(i, working_dir, num_bins),
+                            self.gtselect_script_adaptive(i, ra, dec, rad, tmin, tmax, emin, emax, pmin, pmax),
+
+#                             f"""gtselect infile={event_file} outfile=./ft1_00.fits \
+# ra={ra} dec={dec} rad={rad} \
+# tmin={tmin} tmax={tmax} emin={emin} emax={emax} \
+# phasemin={pmin:.6f} phasemax={pmax:.6f} \
+# zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 \
+# evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """,
+                            self.gtbin_script(i, sc_file, emin, emax, ebins, ra, dec),
+                            self.gtltcube_script(i, sc_file, tmin, tmax)
+                        ])
+
+                        script_path = os.path.join(local_dir, f"phase_{i}.sh")
+
+
+                        # phase_dir = os.path.join(local_dir, f"{i}")
+                        # os.makedirs(phase_dir, exist_ok=True)
+                        # script_path = os.path.join(phase_dir, f"phase_{i}.sh")
+                        with open(script_path, "w") as f:
+                            f.write(script_content)
+
+                    self.status_text.append(
+                        f"✅ Generated {num_bins} adaptive phase scripts in {local_dir}"
+                    )
+
+                    # Optional: Upload if toggle enabled
+                    if self.upload_toggle.isChecked():
+                        self.status_text.append("🚀 Uploading adaptive scripts to cluster...")
+                        scp_transfer(local_dir, working_dir)
+
+                except Exception as e:
+                    self.status_text.append(f"⚠️ Adaptive binning error: {e}")
+
 
 
 
@@ -468,6 +639,10 @@ class FermiScriptGenerator(QWidget):
     def gtselect_script(self, phase, ra, dec, radius, tmin, tmax, emin, emax):
         return f"""gtselect infile=./{phase}.fits outfile=./ft1_00.fits ra={ra} dec={dec} rad={radius} tmin={tmin} tmax={tmax} emin={emin} emax={emax} zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
+    def gtselect_script_adaptive(self, phase, ra, dec, radius, tmin, tmax, emin, emax,pmin,pmax):
+        # retun f"""gtselect infile="+str(ev_file_path)+" outfile=./ft1_00.fits ra="+str(ra)+" dec="+str(dec)+" rad=15 tmin="+str(tmin)+" tmax="+str(tmax)+" phasemin="+str(phases[int(phase),0])+" phasemax="+str(phases[int(phase),1]) + " emin="+str(emin)+" emax="+str(emax)+" zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable=\"EVENTS\" chatter=3 clobber=yes debug=no gui=no mode=\"ql\" """
+        return f"""gtselect infile=./{phase}.fits outfile=./ft1_00.fits ra={ra} dec={dec} rad={radius} tmin={tmin} tmax={tmax} emin={emin} emax={emax} phasemin={pmin} phasemax={pmax} zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """
+
     def gtselect_script_multiple(self, phase, ra, dec, radius, tmins, tmaxs, emin, emax):
         return f"""gtselect infile=./{phase}.fits outfile=./ft1_00.fits ra={ra} dec={dec} rad={radius} tmin={tmins[0]} tmax={tmaxs[1]} emin={emin} emax={emax} zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
@@ -513,7 +688,22 @@ if [ "$COUNT" -eq {phase_bins} ]; then
     cp config.yaml $i
     done
 
+
+
+
+
+
+
+
+    # =============================================================================
+    # This is the script that creates directs FermiPhased to execute the reduction
+    # of Fermi data. This process is set up to run on SLURM and requires SBATCH to
+    # specify job details. Please update to match your job manager.
+    # =============================================================================
     cat > analyze_script.sh << 'EOF'
+
+
+
 #!/bin/sh
 #SBATCH -p tiny
 #SBATCH -N 1
@@ -533,8 +723,10 @@ else
     echo "⏳ $COUNT/{phase_bins} phases done. Passing to another node..."
 fi
 """
-
-
+    # =============================================================================
+    # Config File generation
+    # Please update your config file accordingly
+    # =============================================================================
     def generate_config(self, phase, local_dir, event_file, sc_file, ra, dec, radius, tmin, tmax, emin, emax, ebins):
         config = {
             "data": {
@@ -583,6 +775,7 @@ fi
         self.close()
     def generate_analysis_script(self, i, local_dir,working_dir,phase_bins):
         """Write a phase-analysis driver Python script."""
+        source_name = "4FGL J2032.4+4056"
         script_content = f"""import os
 import re
 import numpy as np
@@ -619,7 +812,8 @@ def setup_gta(directory):
     }})
 
     gta.free_sources(distance=15, free=False)
-    gta.free_source('4FGL J2032.4+4056', pars='norm')
+    # gta.free_source('4FGL J2032.4+4056', pars='norm')
+    gta.free_source('{source_name}', pars='norm')
 
     gta.fit(min_fit_quality=3, optimizer='MINUIT', retries=1000, tol=1e-8)
     gta.write_roi('norm', make_plots=True)
@@ -649,7 +843,7 @@ def load_data_and_plot():
             allow_pickle=True
         ).flat[0]
 
-        src = p['sources']['4FGL J2032.4+4056']
+        src = p['sources'][{source_name}]
         fluxes.append(src['flux'])
         flux_err.append(src['flux_err'])
         ts.append(src['ts'])
