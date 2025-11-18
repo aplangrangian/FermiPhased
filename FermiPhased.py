@@ -306,7 +306,7 @@ class FermiScriptGenerator(QWidget):
                 })
                 bin_info_path = os.path.join(local_dir, "adaptive_bins.csv")
                 bin_info.to_csv(bin_info_path, index=False)
-                self.status_text.append(f"📊 Adaptive bin edges saved → {bin_info_path}")
+                self.status_text.append(f"Adaptive bin edges saved → {bin_info_path}")
 
         #         # --- Generate Scripts ---
                   # 000 Old Scripts to generate phase bins 000
@@ -346,11 +346,11 @@ class FermiScriptGenerator(QWidget):
                     #     f.write(script_content)
 
                 self.status_text.append(
-                    f"✅ Generated {num_bins} adaptive phase scripts in: {local_dir}"
+                    f"Generated {num_bins} adaptive phase scripts in: {local_dir}"
                 )
 
             except Exception as e:
-                self.status_text.append(f"⚠️ Adaptive binning error: {e}")
+                self.status_text.append(f"!!! Adaptive binning error: {e}")
 
         else:
             label = QLabel("Number of Phase Bins:")
@@ -547,7 +547,7 @@ class FermiScriptGenerator(QWidget):
                     })
                     bin_info_path = os.path.join(local_dir, "adaptive_bins.csv")
                     bin_info.to_csv(bin_info_path, index=False)
-                    self.status_text.append(f"📊 Saved adaptive bin info → {bin_info_path}")
+                    self.status_text.append(f"Saved adaptive bin info → {bin_info_path}")
 
                     # --- Generate scripts per adaptive bin ---
                     for i, (pmin, pmax) in enumerate(zip(bin_edges[:-1], bin_edges[1:]), start=1):
@@ -575,7 +575,7 @@ class FermiScriptGenerator(QWidget):
                             f.write(script_content)
 
                     self.status_text.append(
-                        f"✅ Generated {num_bins} adaptive phase scripts in {local_dir}"
+                        f"Generated {num_bins} adaptive phase scripts in {local_dir}"
                     )
 
                     if self.upload_toggle.isChecked():
@@ -583,7 +583,7 @@ class FermiScriptGenerator(QWidget):
                         scp_transfer(local_dir, working_dir)
 
                 except Exception as e:
-                    self.status_text.append(f"⚠️ Adaptive binning error: {e}")
+                    self.status_text.append(f"!!! Adaptive binning error: {e}")
 
 
 
@@ -602,7 +602,7 @@ class FermiScriptGenerator(QWidget):
 
 
                 if not (len(tmins) == len(tmaxs) == len(t0s) == len(periods)):
-                    self.status_text.append("⚠️ Error: T0s, Periods, Start times, and Stop times must have the same count.")
+                    self.status_text.append("!!! Error: T0s, Periods, Start times, and Stop times must have the same count.")
                     return
 
                 for i in range(1, phase_bins + 1):
@@ -619,10 +619,10 @@ class FermiScriptGenerator(QWidget):
                     with open(script_path, "w") as f:
                         f.write(script_content)
 
-            self.status_text.append(f"✅ Scripts successfully saved in: {local_dir}")
+            self.status_text.append(f"Scripts successfully saved in: {local_dir}")
 
         except Exception as e:
-            self.status_text.append(f"⚠️ Error: {e}")
+            self.status_text.append(f"!!! Error: {e}")
         if self.upload_toggle.isChecked():
             self.status_text.append("🚀 Uploading scripts to the cluster...")
             # scp_transfer()
@@ -943,7 +943,7 @@ if __name__ == "__main__":
         script_path = os.path.join(local_dir, "analyze_phases.py")
         with open(script_path, "w") as f:
             f.write(script_content)
-        self.status_text.append(f"🐍 Analysis script written: {script_path}")
+        self.status_text.append(f"Analysis script written: {script_path}")
 
 
 
@@ -990,10 +990,10 @@ def scp_transfer(LOCAL_PATH, REMOTE_PATH):
         print(stdout.read().decode())  # Print output from the command
         print(stderr.read().decode())  # Print any errors
         ssh.close()
-        print(f"✅ All scripts uploaded successfully to {SSH_HOST}:{REMOTE_PATH}")
+        print(f"All scripts uploaded successfully to {SSH_HOST}:{REMOTE_PATH}")
 
     except Exception as e:
-        print(f"⚠️ SCP Upload Error: {e}")
+        print(f"!!! SCP Upload Error: {e}")
 
 
 # Run the app
@@ -1004,7 +1004,7 @@ if __name__ == "__main__":
 
     app.exec_()
     for i in range(2, 0, -1):
-        print(f"⏳ Transferring scripts in {i} seconds...", end="\r")
+        print(f"Transferring scripts in {i} seconds...", end="\r")
         time.sleep(1)
     print("\n🚀 Starting SCP transfer now!")
     # self.close()
