@@ -1,15 +1,1 @@
-{"Period": "0.2438033", 
-"T0": "57000.178", 
-"RA": "276.563", 
-"DEC": "-14.8484", 
-"Radius": "10", 
-"Min Time (MET)": "239557417", 
-"Max Time (MET)": "771631991", 
-"Min Energy": "1000", 
-"Max Energy": "500000", 
-"Number of Energy Bins": "10", 
-"Remote Directory": "/DIR/OF/CLUSTER/", 
-"Local Directory": "/HOMEDIR/", 
-"Spacecraft File": "/DIR/TO/SC/FILE/LS5039_SC.fits", 
-"Event File": "/DIR/TO/PH/FILE/LS5039_PH.fits", 
-"Number of Phase Bins": "10"}
+{"Source": "LS 5039", "Radius (Deg)": "15", "RA (J2000 Deg)": "276.5637", "DEC (J2000 Deg)": "-14.8496", "T0 (MJD)": "52825.48", "Period (Days)": "3.90608", "Min Time (MET)": "239557417", "Max Time (MET)": "772588805", "Min Energy (MeV)": "100", "Max Energy (MeV)": "100000", "Number of Energy Bins": "8", "Partition": "gpu", "Cores": "16", "Runtime": "12:00:00", "Remote Directory": "/remote/LS5039", "Local Directory": "/LS5039", "Spacecraft File": "/remote/lat_spacecraft_merged.fits", "Event File": "/remote/Full.fits", "Number of Phase Bins": "40"}
