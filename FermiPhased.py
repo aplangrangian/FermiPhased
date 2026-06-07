@@ -1,6 +1,4 @@
-"""
-FermiPhased code to automate and expedite phased analysis of Fermi-LAT data.
-"""
+"""FermiPhased: to automate and expedite phased analysis of Fermi-LAT data."""
 # =============================================================================
 # Dependencies
 # =============================================================================
@@ -30,7 +28,7 @@ from astropy.io import fits
 # =============================================================================
 
 def create_ssh_client(hostname, username, key_filename):
-    """Creates and returns an SSH client connection using key authentication."""
+    """Create and return an SSH client connection using key authentication."""
     ssh = paramiko.SSHClient()
     # Accept new host keys automatically
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
