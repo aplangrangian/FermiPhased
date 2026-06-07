@@ -1,9 +1,5 @@
-#!/usr/bin/env python3
-# -*- coding: utf-8 -*-
 """
-Created on Sun Nov  9 22:52:40 2025
-
-@author: alexlange
+FermiPhased code to automate and expedite phased analysis of Fermi-LAT data.
 """
 # =============================================================================
 # Dependencies
@@ -12,7 +8,6 @@ Created on Sun Nov  9 22:52:40 2025
 import sys
 import json
 import os
-import time
 from PyQt5.QtGui import QFont, QPixmap
 from PyQt5.QtWidgets import (
     QApplication, QWidget, QVBoxLayout, QLabel, QLineEdit, QPushButton,
