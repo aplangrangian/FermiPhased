@@ -24,7 +24,8 @@ from astropy.io import fits
 
 # =============================================================================
 # If there is a problem with setting up FermiPhased with your cluster, it will
-# be located somewhere here
+# be located somewhere in the following functions for creating the ssh client 
+# or with the transfer of files.
 # =============================================================================
 
 def create_ssh_client(hostname, username, key_filename):
@@ -107,14 +108,15 @@ def scp_transfer(LOCAL_PATH, REMOTE_PATH,config):
 
 
 def prompt(msg, default=None):
-    """Helper for user input with optional default."""
+    """Prompt for user input to generate setup.yaml with optional default."""
     if default:
         val = input(f"{msg} [{default}]: ").strip()
         return val if val else default
     return input(f"{msg}: ").strip()
 
 
-def create_config(config_path):
+def create_setup(config_path):
+    """Create configuration ``setup.yaml'' that holds environment variables."""
     print("\n⚙️ No setup.yaml found — creating one...\n")
 
     config = {
@@ -159,10 +161,11 @@ def create_config(config_path):
 
 
 def load_config(config_path="setup.yaml"):
+    """Load configuration file."""
     config_path = os.path.expanduser(config_path)
 
     if not os.path.exists(config_path):
-        return create_config(config_path)
+        return create_setup(config_path)
 
     with open(config_path, "r") as f:
         return yaml.safe_load(f)
@@ -172,8 +175,7 @@ def load_config(config_path="setup.yaml"):
 # =============================================================================
 
 class FermiScriptGenerator(QWidget):
-
-
+    """Generate GUIs and FermiTools scripts for phase-resolved Fermi-LAT analyses."""
 
     CONFIG = load_config()
 
@@ -206,7 +208,7 @@ class FermiScriptGenerator(QWidget):
         self.email = self.config["email"]
         self.FERMI_MAKE_DIR = self.LOCAL_FERMI_MAKE_DIR
 
-        self.settings_file = "settings.json"  # Default settings file
+        self.settings_file = "settings.json"  # Default settings are hardcoded?
         self.setWindowTitle("Phase-resolved analysis with Fermi-Lat data")
         self.setGeometry(100, 100, 900, 800) # Change to full screen? Needs long enough for paths
         self.setStyleSheet("background-color: #0b0d1b; color: white; font-family: Arial;")
@@ -217,7 +219,7 @@ class FermiScriptGenerator(QWidget):
         # Fermi Logo
         self.logo_label = QLabel(self)
         self.logo_label.setPixmap(QPixmap("fermi_logo.png").scaled(150, 150, Qt.AspectRatioMode.KeepAspectRatio, Qt.TransformationMode.SmoothTransformation))
-        self.logo_label.setAlignment(Qt.AlignCenter)  # Correct alignment
+        self.logo_label.setAlignment(Qt.AlignCenter)
         layout.addWidget(self.logo_label)
 
 
@@ -231,7 +233,7 @@ class FermiScriptGenerator(QWidget):
         # Title
         title_label = QLabel("Fermi Script Generator")
         title_label.setFont(QFont("Arial", 16, QFont.Weight.Bold))
-        self.logo_label.setAlignment(Qt.AlignCenter)  # Correct alignment
+        self.logo_label.setAlignment(Qt.AlignCenter) 
         layout.addWidget(title_label)
 
         # Divider Line
@@ -332,6 +334,7 @@ class FermiScriptGenerator(QWidget):
 
 
     def create_input(self, layout, label, default_value=""):
+        """Provide a file."""
         lbl = QLabel(f"{label}:")
         lbl.setStyleSheet("color: #00BFFF;")
         entry = QLineEdit()
@@ -350,6 +353,7 @@ class FermiScriptGenerator(QWidget):
 
 
     def create_custom_input(self, label, default_value=""):
+        """Provide a file."""
         lbl = QLabel(f"{label}:")
         lbl.setStyleSheet("color: #00BFFF;")
         entry = QLineEdit()
@@ -371,6 +375,7 @@ class FermiScriptGenerator(QWidget):
 
 
     def create_file_input(self, layout, label, is_directory=False):
+        """Provide a file."""
         lbl = QLabel(f"{label}:")
         lbl.setStyleSheet("color: #00BFFF;")
         entry = QLineEdit()
@@ -395,6 +400,7 @@ class FermiScriptGenerator(QWidget):
 
 
     def update_mode_fields(self):
+        """Switch GUI to match selected analysis mode."""
         mode = self.mode_switch.currentText()
         # working_dir = self.fields["Remote Directory"].text().strip()
         # local_dir = self.fields["Local Directory"].text().strip()
@@ -471,7 +477,7 @@ class FermiScriptGenerator(QWidget):
 
 
     def browse_file(self, entry, is_directory=False):
-        """Opens a file or directory dialog."""
+        """Open a file or directory dialog."""
         if is_directory:
             path = QFileDialog.getExistingDirectory(self, "Select Directory")
         else:
@@ -480,7 +486,7 @@ class FermiScriptGenerator(QWidget):
             entry.setText(path)
 
     def select_settings_file(self):
-        """Allows user to select a settings JSON file."""
+        """Allow user to select a settings JSON file."""
         file_path, _ = QFileDialog.getOpenFileName(self, "Select Settings File", "", "JSON Files (*.json)")
         if file_path:
             self.settings_file = file_path
@@ -488,14 +494,14 @@ class FermiScriptGenerator(QWidget):
             self.load_settings()
 
     def save_settings(self):
-        """Saves the current settings to a JSON file."""
+        """Save the current settings to a JSON file."""
         settings = {key: self.fields[key].text() for key in self.fields}
         with open(self.settings_file, "w") as f:
             json.dump(settings, f)
         self.status_text.append(f"Settings saved to {self.settings_file}")
 
     def load_settings(self):
-        """Loads settings from the selected JSON file."""
+        """Load settings from the selected JSON file."""
         if os.path.exists(self.settings_file):
             with open(self.settings_file, "r") as f:
                 settings = json.load(f)
@@ -505,21 +511,21 @@ class FermiScriptGenerator(QWidget):
             self.status_text.append(f"Settings loaded from {self.settings_file}")
 
     def reset_settings(self):
-        """Resets settings to default values."""
+        """Reset settings to default values."""
         for key in self.fields:
             self.fields[key].setText("")
         self.status_text.append("Settings reset.")
 
     def parse_float_list(self, field_name):
+        """Parse input for floats."""
         raw = self.fields[field_name].text()
         print(f"DEBUG: Raw input for {field_name!r} → {repr(raw)}")
         return [float(x.strip()) for x in raw.split(',')]
 
     def generate_scripts(self):
-        """Needs mode updates"""
+        """Generate the scripts based on mode and save in the specified Remote Directory."""
         mode = self.mode_switch.currentText()
-        print(mode)
-        """Generates the scripts and saves them in the selected Remote Directory."""
+        # print(mode)
         working_dir = self.fields["Remote Directory"].text().strip()
         local_dir = self.fields["Local Directory"].text().strip()
         # REMOTE_PATH = working_dir
@@ -529,7 +535,7 @@ class FermiScriptGenerator(QWidget):
         PARTITION = self.fields["Partition"].text()
 
         if not working_dir:
-            self.status_text.append("⚠️ Error: No remote directory selected!")
+            self.status_text.append("Error: No remote directory selected!")
             return
 
         try:
@@ -638,7 +644,7 @@ class FermiScriptGenerator(QWidget):
                         ]
 
                     if len(pulse_phase) < num_counts:
-                        self.status_text.append("⚠️ Warning: Not enough counts for requested bin size.")
+                        self.status_text.append("Warning: Not enough counts for requested bin size.")
                         return
 
                     # --- Compute adaptive bins ---
@@ -726,7 +732,7 @@ class FermiScriptGenerator(QWidget):
                 periods = list(map(float, self.fields["Period (Days)"].text().split(',')))
 
                 if not (len(tmins) == len(tmaxs) == len(t0s) == len(periods)):
-                    self.status_text.append("⚠️ Error: T0s, Periods, Start times, and Stop times must have the same count.")
+                    self.status_text.append("Error: T0s, Periods, Start times, and Stop times must have the same count.")
                     return
 
                 # clean old scripts
@@ -796,40 +802,49 @@ class FermiScriptGenerator(QWidget):
             self.status_text.append(f"Error: {e}")
         if self.upload_toggle.isChecked():
             self.status_text.append("Uploading scripts to the cluster...")
-            # scp_transfer()
             scp_transfer(local_dir, working_dir,config)
 
     def gen_script(self, phase, phase_bins, ra, dec, t0, period, event_file, sc_file):
+        """Make time cuts using gtmaketime to clean data."""
         cos_value = np.cos(360 / (2 * phase_bins) / 180 * np.pi)  # Precompute cosine
         return f"""gtmktime apply_filter=yes evfile={event_file} scfile={sc_file} outfile=${{PHASE}}.fits filter="COS(2*3.14159265359*(START/(86400)+ 51910-{t0} - ${{SHIFT}}*{period}*{1/phase_bins})/{period})>{cos_value} && COS(2*3.14159265359*(STOP/(86400)+ 51910-{t0} - ${{SHIFT}}*{period}*{1/phase_bins})/{period})>{cos_value} && (DATA_QUAL>0) && (LAT_CONFIG==1)" roicut=no"""
 
     def gen_script_multiple(self, phase, phase_bins, ra, dec, t0s, periods, event_file, sc_file,tmins,tmaxs):
+        """Make time cuts using gtmaketime to clean data for multiple time ranges when using the joint analysis mode."""
         cos_value = np.cos(360 / (2 * phase_bins) / 180 * np.pi)  # Precompute cosine
         return f"""gtmktime apply_filter=yes evfile={event_file} scfile={sc_file} outfile=./{phase}.fits filter="(START > {tmins[0]}) && (START < {tmaxs[0]}) && (STOP > {tmins[0]}) && (STOP < {tmaxs[0]}) && COS(2*3.14159265359*( (START) /(86400)+ 51910-{t0s[0]} - {phase-1}*{periods[0]}*{1/phase_bins})/{periods[0]})>{cos_value} && COS(2*3.14159265359*(( STOP  )/(86400)+ 51910-{t0s[0]} - {phase-1}*{periods[0]}*{1/phase_bins})/{periods[0]})>{cos_value} || (START > {tmins[1]}) && (START < {tmaxs[1]}) && (STOP > {tmins[1]}) && (STOP < {tmaxs[1]}) && COS(2*3.14159265359*( (START) /(86400)+ 51910-{t0s[1]} - {phase-1}*{periods[1]}*{1/phase_bins})/{periods[1]})>{cos_value} && COS(2*3.14159265359*((STOP)/(86400)+ 51910-{t0s[1]} - {phase-1}*{periods[1]}*{1/phase_bins})/{periods[1]})>{cos_value} && (DATA_QUAL>0) && (LAT_CONFIG==1)" roicut=no"""
 
     def gtselect_script(self, phase, ra, dec, radius, tmin, tmax, emin, emax):
+        """Make selection cuts using gtselect to assign phases to data for a standard analysis."""
         return f"""gtselect infile=./${{PHASE}}.fits outfile=./ft1_00.fits ra={ra} dec={dec} rad={radius} tmin={tmin} tmax={tmax} emin={emin} emax={emax} zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
     def gtselect_script_adaptive(self, phase, event_file_dir, ra, dec, radius, tmin, tmax, emin, emax,pmin,pmax):
+        """Make selection cuts using gtselect to cut phase assigned events for an adaptive analysis (likely for a pulsar)."""
         # retun f"""gtselect infile="+str(event_file)+" outfile=./ft1_00.fits ra="+str(ra)+" dec="+str(dec)+" rad=15 tmin="+str(tmin)+" tmax="+str(tmax)+" phasemin="+str(phases[int(phase),0])+" phasemax="+str(phases[int(phase),1]) + " emin="+str(emin)+" emax="+str(emax)+" zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable=\"EVENTS\" chatter=3 clobber=yes debug=no gui=no mode=\"ql\" """
         return f"""gtselect infile={event_file_dir} outfile=./ft1_00.fits ra={ra} dec={dec} rad={radius} tmin={tmin} tmax={tmax} emin={emin} emax={emax} phasemin={pmin} phasemax={pmax} zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
     def gtselect_script_multiple(self, phase, ra, dec, radius, tmins, tmaxs, emin, emax):
+        """Make selection cuts using gtselect to assign phases to data for multiple time ranges when using the joint analysis mode."""
         return f"""gtselect infile=./{phase}.fits outfile=./ft1_00.fits ra={ra} dec={dec} rad={radius} tmin={tmins[0]} tmax={tmaxs[1]} emin={emin} emax={emax} zmin=0.0 zmax=90.0 evclass=128 evtype=3 convtype=-1 evtable="EVENTS" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
     def gtbin_script(self, phase, sc_file, emin, emax, ebins, ra, dec):
+        """Bin using gtbin for the standard analysis mode."""
         return f"""gtbin evfile=./ft1_00.fits scfile={sc_file} outfile=./ccube_00.fits algorithm="ccube" ebinalg="LOG" emin={emin} emax={emax} enumbins={ebins} ebinfile=NONE tbinalg="LIN" tbinfile=NONE nxpix=200 nypix=200 binsz=0.1 coordsys="CEL" xref={ra} yref={dec} axisrot=0.0 rafield="RA" decfield="DEC" proj="AIT" hpx_ordering_scheme="RING" hpx_order=3 hpx_ebin=yes hpx_region= evtable="EVENTS" sctable="SC_DATA" efield="ENERGY" tfield="TIME" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
     def gtbin_script_multiple(self, phase, sc_file, emin, emax, ebins, ra, dec):
+        """Bin using gtbin for multiple time ranges when using the joint analysis mode."""
         return f"""gtbin evfile=./ft1_00.fits scfile={sc_file} outfile=./ccube_00.fits algorithm="ccube" ebinalg="LOG" emin={emin} emax={emax} enumbins={ebins} ebinfile=NONE tbinalg="LIN" tbinfile=NONE nxpix=200 nypix=200 binsz=0.1 coordsys="CEL" xref={ra} yref={dec} axisrot=0.0 rafield="RA" decfield="DEC" proj="AIT" hpx_ordering_scheme="RING" hpx_order=3 hpx_ebin=yes hpx_region= evtable="EVENTS" sctable="SC_DATA" efield="ENERGY" tfield="TIME" chatter=3 clobber=yes debug=no gui=no mode="ql" """
 
     def gtltcube_script(self, phase, sc_file, tmin, tmax):
+        """Bin using gtltcube for the standard analysis mode."""
         return f"""gtltcube evfile=./ft1_00.fits evtable="EVENTS" scfile={sc_file} sctable="SC_DATA" outfile=./ltcube_00.fits dcostheta=0.025 binsz=1.0 phibins=0 tmin={tmin} tmax={tmax} file_version="1" zmin=0.0 zmax=90.0 chatter=2 clobber=yes debug=no gui=no mode="ql" """
 
     def gtltcube_script_multiple(self, phase, sc_file, tmins, tmaxs):
+        """Bin using gtltcube for multiple time ranges when using the joint analysis mode."""
         return f"""gtltcube evfile=./ft1_00.fits evtable="EVENTS" scfile={sc_file} sctable="SC_DATA" outfile=./ltcube_00.fits dcostheta=0.025 binsz=1.0 phibins=0 tmin={tmins[0]} tmax={tmaxs[1]} file_version="1" zmin=0.0 zmax=90.0 chatter=2 clobber=yes debug=no gui=no mode="ql" """
 
     def gen_header(self,phase, working_dir, phase_bins,cores,RUNTIME, FERMI_MAKE_DIR,PARTITION,CLUSTER_SCRIPT_PATH,FermiPyFermiTools_Installation):
+        """Generate header of slurm script that will execute FermiTool scripts."""
         return f"""#!/bin/sh
 
 #SBATCH -p {PARTITION}
@@ -858,6 +873,7 @@ cd ${{PHASE}}
 
 
     def gen_closer(self, phase_bins, working_dir, phase, cores, RUNTIME, PARTITION,FERMI_MAKE_DIR,email,CLUSTER_SCRIPT_PATH,FermiPyFermiTools_Installation):
+        """Generate closing script to execute python analysis script."""
         return f"""
 cd ..
 echo phase done
@@ -943,7 +959,7 @@ fi
                         radius, tmin, tmax, emin, emax, ebins,
                         CLUSTER_ISODIFF_PATH, CLUSTER_GALDIFF_PATH,
                         CLUSTER_CAT_PATH, CLUSTER_EXT_CAT_PATH ):
-
+        """Generate a configuration script ``config.yaml'' for likelihood analysis."""
         config = {
             "data": {
                 "evfile": "./ft1_00.fits",
@@ -980,7 +996,7 @@ fi
                 "catalogs": CLUSTER_CAT_PATH
             }
         }
-        config_path = os.path.join(local_dir, f"config.yaml")
+        config_path = os.path.join(local_dir, "config.yaml")
         with open(config_path, "w") as f:
             yaml.dump(config, f, default_flow_style=False, sort_keys=False)
 
@@ -1259,7 +1275,7 @@ if __name__ == "__main__":
 # Run the app
 if __name__ == "__main__":
     app = QApplication(sys.argv)
-    config = load_config()   # ← load once here
+    config = load_config()
     window = FermiScriptGenerator(config)
     window.show()
     sys.exit(app.exec_())
