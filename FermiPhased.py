@@ -151,7 +151,6 @@ def create_setup(config_path):
         "email": prompt("Email address (alexlange@gwu.edu)"),
     }
 
-    # Save file
     with open(config_path, "w") as f:
         yaml.dump(config, f, sort_keys=False)
 
